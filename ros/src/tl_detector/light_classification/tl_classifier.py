@@ -82,12 +82,12 @@ class TLClassifier(object):
 
         return state
 
-    def get_classification(self, image, TL_BB_list, simulator_mode):
+    def get_classification(self, image, darknet_bboxes, simulation):
         """Determines the color of the traffic light in the image
 
         Args:
             image (cv::Mat): image containing the traffic light
-            TL_BB_list (List): List containing bounding boxe(s) of Traffic Lights
+            darknet_bboxes (List): List containing bounding boxe(s) of Traffic Lights
 
         Returns:
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
@@ -95,22 +95,22 @@ class TLClassifier(object):
         """
         print " into get_classification"
         # if list is empty, return UNKNOWN
-        if not TL_BB_list:
+        if not darknet_bboxes:
             return TrafficLight.UNKNOWN
 
         else:
             print " run get_classification"
             # We consider the BB with highest probability (at index 0)
-            xmin = TL_BB_list[0].xmin
-            xmax = TL_BB_list[0].xmax
-            ymin = TL_BB_list[0].ymin
-            ymax = TL_BB_list[0].ymax
+            xmin = darknet_bboxes[0].xmin
+            xmax = darknet_bboxes[0].xmax
+            ymin = darknet_bboxes[0].ymin
+            ymax = darknet_bboxes[0].ymax
 
             # cropped image
             bb_image = image[ymin:ymax, xmin:xmax]
 
             # Check if running in simulator mode
-            if int(simulator_mode) == 1:
+            if simulation == 1:
                 #**********************************************Only works in Simulator, Not on site********************************
                 # Convert to HSV
                 hsv_bb_img = cv2.cvtColor(bb_image, cv2.COLOR_BGR2HSV)

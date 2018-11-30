@@ -46,12 +46,12 @@ class TLDetector(object):
         sub3 = rospy.Subscriber('/vehicle/traffic_lights', TrafficLightArray, self.traffic_cb)
         sub6 = rospy.Subscriber('/image_color', Image, self.image_cb)
 
-	sub = rospy.Subscriber('/darknet_ros/bounding_boxes', BoundingBoxes, self.detected_bb_cb)
+	sub = rospy.Subscriber('/darknet_ros/bounding_boxes', BoundingBoxes,self.darknet_bboxes_cb)
 
         config_string = rospy.get_param("/traffic_light_config")
         self.config = yaml.load(config_string)
 
-        self.simulator_mode = rospy.get_param("/simulator_mode")
+        self.simulation = int(rospy.get_param("/simulation"))
         self.upcoming_red_light_pub = rospy.Publisher('/traffic_waypoint', Int32, queue_size=1)
 
         self.bridge = CvBridge()
@@ -63,7 +63,23 @@ class TLDetector(object):
         self.last_wp = -1
         self.state_count = 0
 
-        self.TL_BB_list = None
+        self.darknet_bboxes = None
+
+        # Simulation : If diagonal size of bounding box is more than 85px
+        # Simulation : Bounding Box class should be 'traffic light' with probability >= 85%
+        simulation_bboxes_size_threshold = 85 #px
+        simulation_bboxes_probability = 0.85
+        # Site : If diagonal size of bounding box is more than 80px
+        # Site : Bounding Box class should be 'traffic light' with probability >= 25%
+        site_bboxes_size_threshold = 40 #px
+        site_bboxes_probability = 0.25
+
+        if self.simulation == 1:
+            self.prob_thresh = simulation_bboxes_probability
+            self.size_thresh = simulation_bboxes_size_threshold
+        else:
+            self.prob_thresh = site_bboxes_probability
+            self.size_thresh = site_bboxes_size_threshold
 
         rospy.spin()
 
@@ -87,9 +103,10 @@ class TLDetector(object):
             msg (Image): image from car-mounted camera
 
         """
+        print "into image_cb"
         self.has_image = True
         self.camera_image = msg
-        light_wp, state = self.process_traffic_lights()
+        light_wp, state = self.process_traffic_lights(msg)
 
         '''
         Publish upcoming red lights at camera frequency.
@@ -109,43 +126,20 @@ class TLDetector(object):
             self.upcoming_red_light_pub.publish(Int32(self.last_wp))
         self.state_count += 1
 
-    def detected_bb_cb(self, msg):
-        # ISSUE . no bounding box rostopic out
-        print " into detected_bb_cb"
-        # Clear the list
-        self.TL_BB_list = []
-        # Parameters: Diagnonal size thresholds
-        simulator_bb_size_threshold = 85 #px
-        site_bb_size_threshold = 40 #px
-        # min probability of detection
-        simulator_bb_probability = 0.85
-        site_bb_probability = 0.25
+    def darknet_bboxes_cb(self, msg):
 
-        if int(self.simulator_mode) == 1:
-            prob_thresh = simulator_bb_probability
-            size_thresh = simulator_bb_size_threshold
-        else:
-            prob_thresh = site_bb_probability
-            size_thresh = site_bb_size_threshold
+        print "into darknet_bboxes_cb"
+        self.darknet_bboxes = []
 
-        for bb in msg.bounding_boxes:
-            # Simulator mode: Bounding Box class should be 'traffic light' with probability >= 85%
-            # Site Mode: Bounding Box class should be 'traffic light' with probability >= 25%
-            if str(bb.Class) == 'traffic light' and bb.probability >= prob_thresh:
-                # Simulator mode: If diagonal size of bounding box is more than 85px
-                # Site mode: If diagonal size of bounding box is more than 80px
-                if math.sqrt((bb.xmin - bb.xmax)**2 + (bb.ymin - bb.ymax)**2) >= size_thresh:
-                    self.TL_BB_list.append(bb)
+        for bbox in msg.bounding_boxes:
+            if str(bbox.Class) == 'traffic light' and bbox.probability >= self.prob_thresh:
+                if math.sqrt((bbox.xmin - bbox.xmax)**2 + (bbox.ymin - bbox.ymax)**2) >= self.size_thresh:
+                    self.darknet_bboxes.append(bbox)
 
                     # if running in site mode/ROS bag mode
-                    if int(self.simulator_mode) == 0:
-                        '''The ROS bag version only has video data. Hence no waypoints are loaded and get light function is not called.
-                            So to check detection in ROS bag video, we do TL state classification here itself.
-                        '''
-                        # Get the camera image
+                    if self.simulation == 0:
                         cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
-                        # Crop image
-                        bb_image = cv_image[bb.ymin:bb.ymax, bb.xmin:bb.xmax]
+                        bb_image = cv_image[bbox.ymin:bbox.ymax, bbox.xmin:bbox.xmax]
                         self.light_classifier.detect_light_state(bb_image)
 
     def get_closest_waypoint(self, x, y):
@@ -164,7 +158,7 @@ class TLDetector(object):
         closest_idx = self.waypoint_tree.query([x,y], 1)[1]
         return closest_idx
 
-    def get_light_state(self, light):
+    def get_light_state(self, light,camera_image):
         """Determines the current color of the traffic light
 
         Args:
@@ -176,16 +170,18 @@ class TLDetector(object):
         """
         # For testing, just return the light state
         #return light.state
+
         if(not self.has_image):
             self.prev_light_loc = None
             return False
 
-        cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
+        cv_image = self.bridge.imgmsg_to_cv2(camera_image, "bgr8")
 
         #Get classification
-        return self.light_classifier.get_classification(cv_image, self.TL_BB_list, self.simulator_mode)
+        print ' before classification need darknet bbox'
+        return  self.light_classifier.get_classification(cv_image,self.darknet_bboxes, self.simulation)
 
-    def process_traffic_lights(self):
+    def process_traffic_lights(self,camera_image):
         """Finds closest visible traffic light, if one exists, and determines its
             location and color
 
@@ -218,7 +214,7 @@ class TLDetector(object):
                     closest_light = light
                     line_wp_idx = temp_wp_idx
         if closest_light:
-            state = self.get_light_state(closest_light)
+            state = self.get_light_state(closest_light,camera_image)
             return line_wp_idx, state
 
         #self.waypoints = None
