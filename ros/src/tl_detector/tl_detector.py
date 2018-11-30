@@ -24,6 +24,7 @@ class TLDetector(object):
     def __init__(self):
         rospy.init_node('tl_detector')
 
+        self.UseKnownTL = False #True
         self.pose = None
         self.waypoints = None
 
@@ -63,7 +64,7 @@ class TLDetector(object):
         self.last_wp = -1
         self.state_count = 0
 
-        self.darknet_bboxes = None
+        self.darknet_bboxes = []
 
         # Simulation : If diagonal size of bounding box is more than 85px
         # Simulation : Bounding Box class should be 'traffic light' with probability >= 85%
@@ -103,10 +104,19 @@ class TLDetector(object):
             msg (Image): image from car-mounted camera
 
         """
-        print "into image_cb"
+        #print "into image_cb"
         self.has_image = True
+        #if self.darknet_bboxes == []:
         self.camera_image = msg
-        light_wp, state = self.process_traffic_lights(msg)
+            #print "save camera_image for bboxes"
+        if self.darknet_bboxes != []:
+            state = self.process_bbox_and_camera_img(self.darknet_bboxes,self.camera_image)
+            if state == TrafficLight.RED or state == TrafficLight.YELLOW or state == TrafficLight.GREEN:
+                self.darknet_bboxes = []
+
+    def process_bbox_and_camera_img(self,darknet_bboxes, camera_image):
+
+        light_wp, state = self.process_traffic_lights(darknet_bboxes,camera_image)
 
         '''
         Publish upcoming red lights at camera frequency.
@@ -125,6 +135,7 @@ class TLDetector(object):
         else:
             self.upcoming_red_light_pub.publish(Int32(self.last_wp))
         self.state_count += 1
+        return state
 
     def darknet_bboxes_cb(self, msg):
 
@@ -141,6 +152,8 @@ class TLDetector(object):
                         cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
                         bb_image = cv_image[bbox.ymin:bbox.ymax, bbox.xmin:bbox.xmax]
                         self.light_classifier.detect_light_state(bb_image)
+        #self.process_bbox_and_camera_img(self.darknet_bboxes,self.camera_image)
+        #self.darknet_bboxes = []
 
     def get_closest_waypoint(self, x, y):
         """Identifies the closest path waypoint to the given position
@@ -158,7 +171,7 @@ class TLDetector(object):
         closest_idx = self.waypoint_tree.query([x,y], 1)[1]
         return closest_idx
 
-    def get_light_state(self, light,camera_image):
+    def get_light_state(self, light,darknet_bboxes,camera_image):
         """Determines the current color of the traffic light
 
         Args:
@@ -168,20 +181,21 @@ class TLDetector(object):
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
 
         """
-        # For testing, just return the light state
-        #return light.state
-
+        #print "into get_light_state"
+        if self.UseKnownTL == True:
+            # For testing, just return the light state
+            light_state = light.state
+            return light_state
         if(not self.has_image):
             self.prev_light_loc = None
             return False
 
         cv_image = self.bridge.imgmsg_to_cv2(camera_image, "bgr8")
 
-        #Get classification
-        print ' before classification need darknet bbox'
-        return  self.light_classifier.get_classification(cv_image,self.darknet_bboxes, self.simulation)
+        light_state = self.light_classifier.get_classification(cv_image,darknet_bboxes, self.simulation)
+        return light_state
 
-    def process_traffic_lights(self,camera_image):
+    def process_traffic_lights(self, darknet_bboxes, camera_image):
         """Finds closest visible traffic light, if one exists, and determines its
             location and color
 
@@ -190,7 +204,7 @@ class TLDetector(object):
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
 
         """
-
+        #print "into process_traffic_lights"
         closest_light = None
         line_wp_idx = None
 
@@ -214,7 +228,7 @@ class TLDetector(object):
                     closest_light = light
                     line_wp_idx = temp_wp_idx
         if closest_light:
-            state = self.get_light_state(closest_light,camera_image)
+            state = self.get_light_state(closest_light,darknet_bboxes,camera_image)
             return line_wp_idx, state
 
         #self.waypoints = None

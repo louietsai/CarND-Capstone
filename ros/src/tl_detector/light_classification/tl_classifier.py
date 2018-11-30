@@ -93,13 +93,13 @@ class TLClassifier(object):
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
 
         """
-        print " into get_classification"
+        #print " into get_classification"
         # if list is empty, return UNKNOWN
         if not darknet_bboxes:
             return TrafficLight.UNKNOWN
 
         else:
-            print " run get_classification"
+            #print " run get_classification"
             # We consider the BB with highest probability (at index 0)
             xmin = darknet_bboxes[0].xmin
             xmax = darknet_bboxes[0].xmax

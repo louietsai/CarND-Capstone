@@ -328,7 +328,8 @@ void *YoloObjectDetector::detectInThread()
 {
   running_ = 1;
   float nms = .4;
-
+  double start_time = what_time_is_it_now();
+  printf(" into detectInThread , time : %lf\n", start_time);
   layer l = net_->layers[net_->n - 1];
   float *X = buffLetter_[(buffIndex_ + 2) % 3].data;
   float *prediction = network_predict(net_, X);
@@ -345,6 +346,7 @@ void *YoloObjectDetector::detectInThread()
     printf("\033[1;1H");
     printf("\nFPS:%.1f\n",fps_);
     printf("Objects:\n\n");
+    printf("detection time :  %lf seconds\n", what_time_is_it_now() - start_time);
   }
   image display = buff_[(buffIndex_+2) % 3];
   draw_detections(display, dets, nboxes, demoThresh_, demoNames_, demoAlphabet_, demoClasses_);
@@ -537,6 +539,9 @@ void YoloObjectDetector::yolo()
       fps_ = 1./(what_time_is_it_now() - demoTime_);
       demoTime_ = what_time_is_it_now();
       if (viewImage_) {
+        char name[256];
+        sprintf(name, "~/%s_%08d", demoPrefix_, count);
+        save_image(buff_[(buffIndex_ + 1) % 3], name);
         displayInThread(0);
       }
       publishInThread();
@@ -578,14 +583,18 @@ bool YoloObjectDetector::isNodeRunning(void)
 void *YoloObjectDetector::publishInThread()
 {
   // Publish image.
+  ROS_INFO("[YoloObjectDetector] publish in thread.");
   cv::Mat cvImage = cv::cvarrToMat(ipl_);
   if (!publishDetectionImage(cv::Mat(cvImage))) {
     ROS_DEBUG("Detection image has not been broadcasted.");
   }
+  ROS_INFO("[YoloObjectDetector] publish detect image.");
 
   // Publish bounding boxes and detection result.
   int num = roiBoxes_[0].num;
   if (num > 0 && num <= 100) {
+  ROS_INFO("[YoloObjectDetector] has bounding boxes");
+
     for (int i = 0; i < num; i++) {
       for (int j = 0; j < numClasses_; j++) {
         if (roiBoxes_[i].Class == j) {
@@ -623,6 +632,7 @@ void *YoloObjectDetector::publishInThread()
     boundingBoxesResults_.header.frame_id = "detection";
     boundingBoxesResults_.image_header = headerBuff_[(buffIndex_ + 1) % 3];
     boundingBoxesPublisher_.publish(boundingBoxesResults_);
+    ROS_INFO("[YoloObjectDetector] publish bounding_boxes.");
   } else {
     std_msgs::Int8 msg;
     msg.data = 0;
@@ -643,6 +653,5 @@ void *YoloObjectDetector::publishInThread()
 
   return 0;
 }
-
 
 } /* namespace darknet_ros*/
