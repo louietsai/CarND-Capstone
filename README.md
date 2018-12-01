@@ -92,7 +92,7 @@ do image proprocessing, and then identify the color of the traffic light
 
 ![original red1](./imgs/red_light/red1.png)
 
-some fine tunes for way point updater and twist controller
+#### some fine tunes for way point updater and twist controller
 
 <br />
 the car may shift when it drives too fast for a larger curve, and then it may hit on some obstacles.
