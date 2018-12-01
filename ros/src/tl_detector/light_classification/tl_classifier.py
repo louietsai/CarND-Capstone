@@ -11,6 +11,8 @@ class TLClassifier(object):
         # Publish cropped TL bounding box
         self.cropped_tl_bb_pub = rospy.Publisher('/cropped_bb', Image, queue_size=1)
         self.bridge = CvBridge()
+        self.images_path = "/home/louie/"
+        self.classified_img_count = 0
 
     # Return state of light in BB image
     def detect_light_state(self, bb_image):
@@ -109,15 +111,35 @@ class TLClassifier(object):
             # cropped image
             bb_image = image[ymin:ymax, xmin:xmax]
 
+            self.classified_img_count += 1
+            image_name = "bb_img_"+str(self.classified_img_count)+".png"
+            image_path = self.images_path + image_name
+
+            cv2.imwrite(image_path, bb_image)
+
             # Check if running in simulator mode
             if simulation == 1:
                 #**********************************************Only works in Simulator, Not on site********************************
                 # Convert to HSV
                 hsv_bb_img = cv2.cvtColor(bb_image, cv2.COLOR_BGR2HSV)
 
+                image_name = "hsv_bb_img.png"
+                image_name = "hsv_bb_img_"+str(self.classified_img_count)+".png"
+                image_path = self.images_path + image_name
+
+                cv2.imwrite(image_path, hsv_bb_img)
+
                 # Red Color ranges (Red has two ranges)
                 frame_threshed_red1 = cv2.inRange(hsv_bb_img, (0, 70, 50), (10, 255, 255))
                 frame_threshed_red2 = cv2.inRange(hsv_bb_img, (170, 70, 50), (180, 255, 255))
+
+                image_name = "red1_"+str(self.classified_img_count)+".png"
+                image_path = self.images_path + image_name
+                cv2.imwrite(image_path, frame_threshed_red1)
+
+                image_name = "red2_"+str(self.classified_img_count)+".png"
+                image_path = self.images_path + image_name
+                cv2.imwrite(image_path, frame_threshed_red2)
 
                 # Yellow Color range
                 frame_threshed_yellow = cv2.inRange(hsv_bb_img, (40.0/360*255, 100, 100), (66.0/360*255, 255, 255))

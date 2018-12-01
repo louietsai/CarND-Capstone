@@ -39,6 +39,10 @@ class TLDetector(object):
         self.has_new_detecting_image = False
         self.lights = []
 
+        self.images_path = "/home/louie/"
+        self.detected_img_count = 0
+        #self.darknet_img_count = 0
+
         sub1 = rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
         sub2 = rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
 
@@ -120,12 +124,29 @@ class TLDetector(object):
             self.has_new_detecting_image = False
             print(" into image_cb, push a image into array")
 
+            cv_image = self.bridge.imgmsg_to_cv2(self.detecting_camera_image, "bgr8")
+
+            image_name = "detecting_camera_image_"+str(self.detected_img_count)+".png"
+            self.detected_img_count += 1
+            image_path = self.images_path + image_name
+
+            cv2.imwrite(image_path, cv_image)
+
     def darknet_detected_image_cb(self, msg):
 
         print("into darknet_detected_image_cb")
         #self.detecting_camera_image_list.append(msg)
         self.darknet_detecting_camera_image = msg
         self.has_new_detecting_image = True
+
+        #cv_image = self.bridge.imgmsg_to_cv2(self.darknet_detecting_camera_image, "bgr8")
+
+        #image_name = "darknet_camera_image_"+str(self.darknet_img_count)+".png"
+        #self.darknet_img_count += 1
+        #image_path = self.images_path + image_name
+
+        #cv2.imwrite(image_path, cv_image)
+
         return
 
     def darknet_obj_detected_cb(self, msg):
