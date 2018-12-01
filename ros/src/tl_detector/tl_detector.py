@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import rospy
-from std_msgs.msg import Int32
+from std_msgs.msg import Int32, Int8
 from geometry_msgs.msg import PoseStamped, Pose
 from styx_msgs.msg import TrafficLightArray, TrafficLight
 from styx_msgs.msg import Lane
@@ -24,7 +24,7 @@ class TLDetector(object):
     def __init__(self):
         rospy.init_node('tl_detector')
 
-        self.UseKnownTL = False #True
+        self.UseKnownTL = True
         self.pose = None
         self.waypoints = None
 
@@ -32,6 +32,11 @@ class TLDetector(object):
         self.waypoint_tree = None
 
         self.camera_image = None
+        #self.detecting_camera_image_list = []
+        #self.detecting_camera_image_list_orig = []
+        self.darknet_detecting_camera_image = None
+        self.detecting_camera_image = None
+        self.has_new_detecting_image = False
         self.lights = []
 
         sub1 = rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
@@ -47,7 +52,9 @@ class TLDetector(object):
         sub3 = rospy.Subscriber('/vehicle/traffic_lights', TrafficLightArray, self.traffic_cb)
         sub6 = rospy.Subscriber('/image_color', Image, self.image_cb)
 
-	sub = rospy.Subscriber('/darknet_ros/bounding_boxes', BoundingBoxes,self.darknet_bboxes_cb)
+	sub7 = rospy.Subscriber('/darknet_ros/bounding_boxes', BoundingBoxes,self.darknet_bboxes_cb)
+	sub8 = rospy.Subscriber('/darknet_ros/detection_image', Image,self.darknet_detected_image_cb)
+	sub8 = rospy.Subscriber('/darknet_ros/found_object', Int8,self.darknet_obj_detected_cb)
 
         config_string = rospy.get_param("/traffic_light_config")
         self.config = yaml.load(config_string)
@@ -104,15 +111,28 @@ class TLDetector(object):
             msg (Image): image from car-mounted camera
 
         """
-        #print "into image_cb"
+
         self.has_image = True
-        #if self.darknet_bboxes == []:
         self.camera_image = msg
-            #print "save camera_image for bboxes"
-        if self.darknet_bboxes != []:
-            state = self.process_bbox_and_camera_img(self.darknet_bboxes,self.camera_image)
-            if state == TrafficLight.RED or state == TrafficLight.YELLOW or state == TrafficLight.GREEN:
-                self.darknet_bboxes = []
+        if self.has_new_detecting_image == True:
+            #self.detecting_camera_image_list_orig.append(msg)
+            self.detecting_camera_image = msg
+            self.has_new_detecting_image = False
+            print(" into image_cb, push a image into array")
+
+    def darknet_detected_image_cb(self, msg):
+
+        print("into darknet_detected_image_cb")
+        #self.detecting_camera_image_list.append(msg)
+        self.darknet_detecting_camera_image = msg
+        self.has_new_detecting_image = True
+        return
+
+    def darknet_obj_detected_cb(self, msg):
+
+        print("into darknet_obj_detected_cb")
+        print msg.data
+        return
 
     def process_bbox_and_camera_img(self,darknet_bboxes, camera_image):
 
@@ -139,7 +159,7 @@ class TLDetector(object):
 
     def darknet_bboxes_cb(self, msg):
 
-        print "into darknet_bboxes_cb"
+        print("into darknet_bboxes_cb")
         self.darknet_bboxes = []
 
         for bbox in msg.bounding_boxes:
@@ -147,13 +167,20 @@ class TLDetector(object):
                 if math.sqrt((bbox.xmin - bbox.xmax)**2 + (bbox.ymin - bbox.ymax)**2) >= self.size_thresh:
                     self.darknet_bboxes.append(bbox)
 
-                    # if running in site mode/ROS bag mode
-                    if self.simulation == 0:
-                        cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
-                        bb_image = cv_image[bbox.ymin:bbox.ymax, bbox.xmin:bbox.xmax]
-                        self.light_classifier.detect_light_state(bb_image)
-        #self.process_bbox_and_camera_img(self.darknet_bboxes,self.camera_image)
-        #self.darknet_bboxes = []
+        if self.simulation == 1:
+            #camera_image=self.detecting_camera_image_list.pop(0)
+            camera_image=self.darknet_detecting_camera_image
+            #camera_image_orig=self.detecting_camera_image_list_orig.pop(0)
+            camera_image_orig=self.detecting_camera_image
+            self.process_bbox_and_camera_img(self.darknet_bboxes,camera_image_orig)
+            self.darknet_bboxes = []
+        else:
+            #camera_image=self.detecting_camera_image_list_orig.pop(0)
+            camera_image=self.detecting_camera_image
+            bbox = self.darknet_bboxes.pop(0)
+            cv_image = self.bridge.imgmsg_to_cv2(camera_image, "bgr8")
+            bb_image = cv_image[bbox.ymin:bbox.ymax, bbox.xmin:bbox.xmax]
+            self.light_classifier.detect_light_state(bb_image)
 
     def get_closest_waypoint(self, x, y):
         """Identifies the closest path waypoint to the given position
@@ -182,17 +209,22 @@ class TLDetector(object):
 
         """
         #print "into get_light_state"
-        if self.UseKnownTL == True:
-            # For testing, just return the light state
-            light_state = light.state
-            return light_state
+        # For testing, just return the light state
+        light_state_no_dect = light.state
+
         if(not self.has_image):
             self.prev_light_loc = None
             return False
 
         cv_image = self.bridge.imgmsg_to_cv2(camera_image, "bgr8")
 
-        light_state = self.light_classifier.get_classification(cv_image,darknet_bboxes, self.simulation)
+        light_state_dect = self.light_classifier.get_classification(cv_image,darknet_bboxes, self.simulation)
+
+        if self.UseKnownTL == True:
+            light_state = light_state_no_dect
+        else:
+            light_state = light_state_dect
+
         return light_state
 
     def process_traffic_lights(self, darknet_bboxes, camera_image):

@@ -139,6 +139,10 @@ void YoloObjectDetector::init()
   int detectionImageQueueSize;
   bool detectionImageLatch;
 
+  std::string detectedCameraImageTopicName;
+  int detectedCameraImageQueueSize;
+  bool detectedCameraImageLatch;
+
   nodeHandle_.param("subscribers/camera_reading/topic", cameraTopicName,
                     std::string("/camera/image_raw"));
   nodeHandle_.param("subscribers/camera_reading/queue_size", cameraQueueSize, 1);
@@ -155,6 +159,11 @@ void YoloObjectDetector::init()
   nodeHandle_.param("publishers/detection_image/queue_size", detectionImageQueueSize, 1);
   nodeHandle_.param("publishers/detection_image/latch", detectionImageLatch, true);
 
+  nodeHandle_.param("publishers/detected_camera_image/topic", detectedCameraImageTopicName,
+                    std::string("detected_camera_image"));
+  nodeHandle_.param("publishers/detected_camera_image/queue_size", detectedCameraImageQueueSize, 1);
+  nodeHandle_.param("publishers/detected_camera_image/latch", detectedCameraImageLatch, true);
+
   imageSubscriber_ = imageTransport_.subscribe(cameraTopicName, cameraQueueSize,
                                                &YoloObjectDetector::cameraCallback, this);
   objectPublisher_ = nodeHandle_.advertise<std_msgs::Int8>(objectDetectorTopicName,
@@ -165,6 +174,10 @@ void YoloObjectDetector::init()
   detectionImagePublisher_ = nodeHandle_.advertise<sensor_msgs::Image>(detectionImageTopicName,
                                                                        detectionImageQueueSize,
                                                                        detectionImageLatch);
+
+  detectedCameraImagePublisher_ = nodeHandle_.advertise<sensor_msgs::Image>(detectedCameraImageTopicName,
+                                                                       detectedCameraImageQueueSize,
+                                                                       detectedCameraImageLatch);
 
   // Action servers.
   std::string checkForObjectsActionName;
@@ -333,6 +346,7 @@ void *YoloObjectDetector::detectInThread()
   layer l = net_->layers[net_->n - 1];
   float *X = buffLetter_[(buffIndex_ + 2) % 3].data;
   float *prediction = network_predict(net_, X);
+  double detection_dur_sec = 0;
 
   rememberNetwork(net_);
   detection *dets = 0;
@@ -346,7 +360,8 @@ void *YoloObjectDetector::detectInThread()
     printf("\033[1;1H");
     printf("\nFPS:%.1f\n",fps_);
     printf("Objects:\n\n");
-    printf("detection time :  %lf seconds\n", what_time_is_it_now() - start_time);
+    detection_dur_sec = what_time_is_it_now() - start_time;
+    printf("detection time :  %lf seconds\n", detection_dur_sec);
   }
   image display = buff_[(buffIndex_+2) % 3];
   draw_detections(display, dets, nboxes, demoThresh_, demoNames_, demoAlphabet_, demoClasses_);
@@ -398,6 +413,10 @@ void *YoloObjectDetector::detectInThread()
     roiBoxes_[0].num = 0;
   } else {
     roiBoxes_[0].num = count;
+    char name[256];
+    sprintf(name, "~/%lf_%lf", what_time_is_it_now(), detection_dur_sec);
+    printf("save detected image name : %s  time :  %lf seconds\n", name, what_time_is_it_now());
+    save_image(buff_[(buffIndex_ + 2) % 3], name);
   }
 
   free_detections(dets, nboxes);
@@ -408,6 +427,8 @@ void *YoloObjectDetector::detectInThread()
 
 void *YoloObjectDetector::fetchInThread()
 {
+  double start_time = what_time_is_it_now();
+  printf(" into fetchInThread , time : %lf\n", start_time);
   IplImageWithHeader_ imageAndHeader = getIplImageWithHeader();
   IplImage* ROS_img = imageAndHeader.image;
   ipl_into_image(ROS_img, buff_[buffIndex_]);
@@ -479,14 +500,17 @@ void YoloObjectDetector::setupNetwork(char *cfgfile, char *weightfile, char *dat
 
 void YoloObjectDetector::yolo()
 {
-  const auto wait_duration = std::chrono::milliseconds(2000);
+  printf("into Waiting for image.\n");
+  // change pulling freq
+  const auto wait_duration = std::chrono::milliseconds(30);
   while (!getImageStatus()) {
-    printf("Waiting for image.\n");
+    //printf("Waiting for image.\n");
     if (!isNodeRunning()) {
       return;
     }
     std::this_thread::sleep_for(wait_duration);
   }
+  printf("got image.\n");
 
   std::thread detect_thread;
   std::thread fetch_thread;
@@ -539,9 +563,9 @@ void YoloObjectDetector::yolo()
       fps_ = 1./(what_time_is_it_now() - demoTime_);
       demoTime_ = what_time_is_it_now();
       if (viewImage_) {
-        char name[256];
-        sprintf(name, "~/%s_%08d", demoPrefix_, count);
-        save_image(buff_[(buffIndex_ + 1) % 3], name);
+        //char name[256];
+        //sprintf(name, "~/%s_%08d", demoPrefix_, count);
+        //save_image(buff_[(buffIndex_ + 1) % 3], name);
         displayInThread(0);
       }
       publishInThread();
@@ -633,10 +657,13 @@ void *YoloObjectDetector::publishInThread()
     boundingBoxesResults_.image_header = headerBuff_[(buffIndex_ + 1) % 3];
     boundingBoxesPublisher_.publish(boundingBoxesResults_);
     ROS_INFO("[YoloObjectDetector] publish bounding_boxes.");
+
+    //detectedCameraImagePublisher_.publish();
   } else {
     std_msgs::Int8 msg;
     msg.data = 0;
     objectPublisher_.publish(msg);
+    ROS_INFO("[YoloObjectDetector] publish object_number.");
   }
   if (isCheckingForObjects()) {
     ROS_DEBUG("[YoloObjectDetector] check for objects in image.");
