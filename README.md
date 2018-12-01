@@ -35,7 +35,7 @@ Car will follow the pre-defined waypoint.<br />
 
 
 <br />
-Add a darknet_ros node for Yolo v3 traffic_light detection. <br />
+ Add a darknet_ros node for Yolo v3 traffic_light detection. <br />
 
 	Subscribed Topics
 	/camera_reading ([sensor_msgs/Image])
@@ -70,7 +70,7 @@ ref from https://arxiv.org/abs/1804.02767
 
 
 <br />
-here is saved detected image for traffic light
+ here is saved detected image for traffic light
 <br />
 
 
@@ -92,6 +92,7 @@ do image proprocessing, and then identify the color of the traffic light
 
 ![original red1](./imgs/red_light/red1.png)
 
+some fine tunes for way point updater and twist controller
 
 <br />
 the car may shift when it drives too fast for a larger curve, and then it may hit on some obstacles.
@@ -106,7 +107,7 @@ the car may shift when it drives too fast for a larger curve, and then it may hi
 ![original shiftstop](./imgs/no_brake_shift2_stop.png)
 
 <br />
-we apply brake when the steering angle is too big, so the car could recover its path slowly even if it shifts out sometime
+##### we apply brake when the steering angle is too big, so the car could recover its path slowly even if it shifts out sometime
 <br />
 
 
