@@ -43,7 +43,7 @@ class Controller(object):
 	current_vel = self.vel_lpf.filt(current_vel)
 
 	steering = self.yaw_controller.get_steering(linear_vel, angular_vel, current_vel)
-
+        print "steering : "+str(steering)
 	vel_error = linear_vel - current_vel
 	self.last_vel = current_vel
 
@@ -61,4 +61,9 @@ class Controller(object):
 		throttle = 0
 		decel = max(vel_error, self.decel_limit)
 		brake = abs(decel) * self.vehicle_mass * self.wheel_radius
+        elif steering > 0.8 or steering < -0.8: # slow down when we have a big steering angle
+		throttle = 0
+		decel = max(vel_error, self.decel_limit)
+		brake = abs(decel) * self.vehicle_mass * self.wheel_radius * abs(steering) / 100
+
 	return throttle, brake, steering
