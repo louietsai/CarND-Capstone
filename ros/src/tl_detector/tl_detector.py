@@ -24,7 +24,7 @@ class TLDetector(object):
     def __init__(self):
         rospy.init_node('tl_detector')
 
-        self.UseKnownTL = True
+        self.UseKnownTL = False
         self.pose = None
         self.waypoints = None
 
@@ -118,6 +118,11 @@ class TLDetector(object):
 
         self.has_image = True
         self.camera_image = msg
+
+        # use camera cb to publish red light topic
+        if self.UseKnownTL == True:
+            self.process_bbox_and_camera_img(self.darknet_bboxes,self.camera_image)
+
         if self.has_new_detecting_image == True:
             #self.detecting_camera_image_list_orig.append(msg)
             self.detecting_camera_image = msg
@@ -231,21 +236,14 @@ class TLDetector(object):
         """
         #print "into get_light_state"
         # For testing, just return the light state
-        light_state_no_dect = light.state
-
-        if(not self.has_image):
-            self.prev_light_loc = None
-            return False
-
-        cv_image = self.bridge.imgmsg_to_cv2(camera_image, "bgr8")
-
-        light_state_dect = self.light_classifier.get_classification(cv_image,darknet_bboxes, self.simulation)
 
         if self.UseKnownTL == True:
-            light_state = light_state_no_dect
+            light_state = light.state
         else:
-            light_state = light_state_dect
+            cv_image = self.bridge.imgmsg_to_cv2(camera_image, "bgr8")
+            light_state = self.light_classifier.get_classification(cv_image,darknet_bboxes, self.simulation)
 
+        #print light_state
         return light_state
 
     def process_traffic_lights(self, darknet_bboxes, camera_image):
