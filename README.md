@@ -34,34 +34,87 @@ Car will follow the pre-defined waypoint.<br />
 ![original darknet_ros](./imgs/darknet_ros.png)
 
 
-![original darknet_ros](./imgs/tl_detector.png)
+<br />
+Add a darknet_ros node for Yolo v3 traffic_light detection. <br />
+
+	Subscribed Topics
+	/camera_reading ([sensor_msgs/Image])
+
+	The camera measurements.
+
+	Published Topics
+	object_detector ([std_msgs::Int8])
+
+	Publishes the number of detected objects.
+
+	bounding_boxes ([darknet_ros_msgs::BoundingBoxes])
+
+	Publishes an array of bounding boxes that gives information of the position and size of the bounding box in pixel coordinates.
+
+	detection_image ([sensor_msgs::Image])
+
+	Publishes an image of the detection image including the bounding boxes.
+Listen to darknet_ros/bounding_boxes and detection_image topics. save the image when we receive detection_image ros inpiput and classify the traffic light when we receive the bounding boxes ros input with the related save camera image <br />
+<br />
 
 
-![original darknet_ros](./imgs/darknet.png)
+![original tl](./imgs/tl_detector.png)
+
+<br />
+here is the darknet network architecture.
+ref from https://arxiv.org/abs/1804.02767
+<br />
 
 
-![original darknet_ros](./imgs/red_light/detecting_camera_image_0.png)
+![original darknet](./imgs/darknet.png)
 
 
-![original darknet_ros](./imgs/red_light/bb_img.png)
+<br />
+here is saved detected image for traffic light
+<br />
 
 
-![original darknet_ros](./imgs/red_light/hsv_bb_img.png)
+![original camimg0](./imgs/red_light/detecting_camera_image_0.png)
+
+<br />
+drop the image according to the bounding box, and focus on trafflic light
+<br />
 
 
-![original darknet_ros](./imgs/red_light/red1.png)
+![original bbimg](./imgs/red_light/bb_img.png)
+
+<br />
+do image proprocessing, and then identify the color of the traffic light
+<br />
+
+![original hsv](./imgs/red_light/hsv_bb_img.png)
 
 
-![original darknet_ros](./imgs/no_brake_shift1.png)
+![original red1](./imgs/red_light/red1.png)
 
 
-![original darknet_ros](./imgs/no_brake_shift2_stop.png)
+<br />
+the car may shift when it drives too fast for a larger curve, and then it may hit on some obstacles.
+<br />
 
 
-![original darknet_ros](./imgs/brake_recover1.png)
+
+![original shift1](./imgs/no_brake_shift1.png)
 
 
-![original darknet_ros](./imgs/brake_recover2.png)
+
+![original shiftstop](./imgs/no_brake_shift2_stop.png)
+
+<br />
+we apply brake when the steering angle is too big, so the car could recover its path slowly even if it shifts out sometime
+<br />
+
+
+
+![original brake1](./imgs/brake_recover1.png)
+
+
+![original brake2](./imgs/brake_recover2.png)
 
 
 Please use **one** of the two installation options, either native **or** docker installation.
