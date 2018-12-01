@@ -107,7 +107,7 @@ the car may shift when it drives too fast for a larger curve, and then it may hi
 ![original shiftstop](./imgs/no_brake_shift2_stop.png)
 
 <br />
-##### we apply brake when the steering angle is too big, so the car could recover its path slowly even if it shifts out sometime
+ we apply brake when the steering angle is too big, so the car could recover its path slowly even if it shifts out sometime
 <br />
 
 
